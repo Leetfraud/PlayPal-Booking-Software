@@ -10,6 +10,7 @@ import { BookingConfirmationScreen } from './components/BookingConfirmationScree
 import { PaymentScreen } from './components/PaymentScreen';
 import { PlayerDashboard } from './components/PlayerDashboard';
 import { AdminDashboard } from './components/AdminDashboard';
+import { apiRequest } from './api';
 
 type Screen = 
   | 'splash' 
@@ -28,6 +29,26 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('splash');
   const [userRole, setUserRole] = useState<'player' | 'owner' | 'admin' | null>(null);
 
+  interface BookingState {
+  venueId: number;
+  venueName: string;
+  slotId: number | null;
+  bookingId: number | null; // This allows us to store the ID from the DB
+  startTime: string;
+  endTime: string;
+  price: number;
+}
+
+const [selectedBooking, setSelectedBooking] = useState<BookingState>({
+  venueId: 1,
+  venueName: "Court Elite Basketball",
+  slotId: null,
+  bookingId: null, // Initialized as null
+  startTime: "",
+  endTime: "",
+  price: 0
+});
+
   // Auto-navigate from splash to role selection after 3 seconds
   useEffect(() => {
     if (currentScreen === 'splash') {
@@ -37,6 +58,8 @@ export default function App() {
       return () => clearTimeout(timer);
     }
   }, [currentScreen]);
+
+
 
   const handleSelectRole = (role: 'player' | 'owner' | 'admin') => {
     console.log('Selected role:', role);
@@ -110,16 +133,42 @@ export default function App() {
             onViewAvailability={() => setCurrentScreen('availability')}
           />
         );
-      case 'availability':
+        
+        case 'availability':
         return (
           <AvailabilityCalendarScreen
             onBack={() => setCurrentScreen('venueDetails')}
-            onSelectSlot={() => setCurrentScreen('confirmation')}
+            onSelectSlot={async (slot) => {
+              try {
+                const response = await apiRequest("/bookings/hold", "POST", {
+                  slot_id: slot.slot_id,
+                  venue_id: slot.venue_id,
+                  user_id: 1 
+                });
+
+                setSelectedBooking({
+                  venueId: slot.venue_id,
+                  venueName: "Court Elite Basketball",
+                  slotId: slot.slot_id,
+                  bookingId: response.booking_id, // Now stored correctly
+                  startTime: new Date(slot.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  endTime: new Date(slot.end_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  price: slot.price
+                });
+
+                setCurrentScreen('confirmation');
+              } catch (error: any) {
+                alert(error.message || "Oops! That slot was just taken. Please pick another.");
+              }
+            }} 
           />
         );
+
+     
       case 'confirmation':
         return (
           <BookingConfirmationScreen
+            bookingData={selectedBooking} // PASS THE DATA HERE
             onBack={() => setCurrentScreen('availability')}
             onProceedToPayment={() => setCurrentScreen('payment')}
           />

@@ -1,41 +1,51 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight, Calendar } from 'lucide-react';
+import { apiRequest } from '../api'; 
 
 interface AvailabilityCalendarScreenProps {
   onBack: () => void;
-  onSelectSlot: () => void;
+  onSelectSlot: (slot: any) => void;
 }
 
 type SlotStatus = 'available' | 'booked' | 'pending';
 
 interface TimeSlot {
-  time: string;
+  slot_id: number;     // From DB
+  venue_id: number;    // From DB
+  start_time: string;  // Changed from 'time' to match DB column
+  end_time: string;
+  price: number;
   status: SlotStatus;
 }
+
 
 export function AvailabilityCalendarScreen({ onBack, onSelectSlot }: AvailabilityCalendarScreenProps) {
   const [selectedDay, setSelectedDay] = useState(2); // Tuesday selected by default
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
 
   const weekDays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const dates = ['Jan 6', 'Jan 7', 'Jan 8', 'Jan 9', 'Jan 10', 'Jan 11', 'Jan 12'];
+ //
+const dates = ['2026-01-06', '2026-01-07', '2026-01-08', '2026-01-09', '2026-01-10', '2026-01-11', '2026-01-12'];
 
-  const timeSlots: TimeSlot[] = [
-    { time: '08:00 AM', status: 'available' },
-    { time: '09:00 AM', status: 'available' },
-    { time: '10:00 AM', status: 'booked' },
-    { time: '11:00 AM', status: 'pending' },
-    { time: '12:00 PM', status: 'available' },
-    { time: '01:00 PM', status: 'available' },
-    { time: '02:00 PM', status: 'booked' },
-    { time: '03:00 PM', status: 'available' },
-    { time: '04:00 PM', status: 'available' },
-    { time: '05:00 PM', status: 'pending' },
-    { time: '06:00 PM', status: 'available' },
-    { time: '07:00 PM', status: 'available' },
-    { time: '08:00 PM', status: 'booked' },
-    { time: '09:00 PM', status: 'available' },
-  ];
+// To keep the UI looking nice, you can format it in the button:
+// <div>{new Date(day).toLocaleDateString('en-US', { weekday: 'short' })}</div>
+
+const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
+const [selectedSlotObject, setSelectedSlotObject] = useState<TimeSlot | null>(null);
+
+// Fetch real data from the backend
+useEffect(() => {
+  const fetchSlots = async () => {
+    try {
+      // Assuming Venue ID 1 for now
+      const data = await apiRequest(`/venues/1/slots?date=${dates[selectedDay]}`, "GET");
+      setTimeSlots(data);
+    } catch (error) {
+      console.error("Failed to fetch slots", error);
+    }
+  };
+  fetchSlots();
+}, [selectedDay]); // Re-fetch if the user changes the day
 
   const getStatusColor = (status: SlotStatus) => {
     switch (status) {
@@ -49,16 +59,17 @@ export function AvailabilityCalendarScreen({ onBack, onSelectSlot }: Availabilit
   };
 
   const handleSlotClick = (slot: TimeSlot) => {
-    if (slot.status === 'available') {
-      setSelectedSlot(slot.time);
-    }
-  };
+  if (slot.status === 'available') {
+    setSelectedSlot(slot.start_time);      // For UI highlight
+    setSelectedSlotObject(slot);           // Store the whole DB object
+  }
+};
 
-  const handleConfirm = () => {
-    if (selectedSlot) {
-      onSelectSlot();
-    }
-  };
+const handleConfirm = () => {
+  if (selectedSlotObject) {
+    onSelectSlot(selectedSlotObject);      // Send the real DB data to App.tsx
+  }
+};
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -86,7 +97,7 @@ export function AvailabilityCalendarScreen({ onBack, onSelectSlot }: Availabilit
             </button>
           </div>
 
-          {/* Week Days */}
+        {/* Week Days */}
           <div className="grid grid-cols-7 gap-2">
             {weekDays.map((day, index) => (
               <button
@@ -99,12 +110,13 @@ export function AvailabilityCalendarScreen({ onBack, onSelectSlot }: Availabilit
                 }`}
               >
                 <div className="text-xs mb-1">{day}</div>
-                <div className="text-sm">{dates[index].split(' ')[1]}</div>
+                <div className="text-sm">
+                  {/* Correctly pulls '6', '7', etc. from your new '2026-01-06' format */}
+                  {new Date(dates[index]).getDate()}
+                </div>
               </button>
             ))}
           </div>
-        </div>
-      </div>
 
       {/* Time Slots */}
       <div className="max-w-md mx-auto px-4 py-6">
@@ -120,7 +132,7 @@ export function AvailabilityCalendarScreen({ onBack, onSelectSlot }: Availabilit
             <span className="text-gray-600">Available</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-gray-400"></div>
+            <div className="w-3 h-3 rounded-full bg-gray-400"></div></div>
             <span className="text-gray-600">Booked</span>
           </div>
           <div className="flex items-center gap-2">
@@ -137,12 +149,14 @@ export function AvailabilityCalendarScreen({ onBack, onSelectSlot }: Availabilit
               onClick={() => handleSlotClick(slot)}
               disabled={slot.status !== 'available'}
               className={`p-4 rounded-xl border-2 transition-all ${
-                selectedSlot === slot.time
+                selectedSlot === slot.start_time
                   ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-md'
                   : getStatusColor(slot.status)
               }`}
             >
-              <div className="text-sm">{slot.time}</div>
+              <div className="text-sm">
+                  {new Date(slot.start_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
               {slot.status === 'pending' && (
                 <div className="text-xs mt-1 opacity-75">On Hold</div>
               )}
@@ -157,7 +171,9 @@ export function AvailabilityCalendarScreen({ onBack, onSelectSlot }: Availabilit
           <div className="max-w-md mx-auto">
             <div className="mb-3 text-center">
               <p className="text-sm text-gray-600">Selected Time</p>
-              <p className="text-lg text-gray-900">{dates[selectedDay]}, {selectedSlot}</p>
+              <p className="text-lg text-gray-900">
+                {new Date(dates[selectedDay]).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, {new Date(selectedSlot).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </p>
             </div>
             <button
               onClick={handleConfirm}
@@ -169,5 +185,5 @@ export function AvailabilityCalendarScreen({ onBack, onSelectSlot }: Availabilit
         </div>
       )}
     </div>
-  );
+  </div>);
 }
